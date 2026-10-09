@@ -3660,6 +3660,10 @@ fn command_cleanup_outcome(result: CommandResult) -> Result<HandoffActionOutcome
 }
 
 fn direct_to_native(request: DirectRequest) -> Result<crate::engine::Request> {
+    let retention = request
+        .replay_context
+        .as_ref()
+        .and_then(|context| context.retention);
     Ok(crate::engine::Request {
         request_id: request
             .uuid
@@ -3667,6 +3671,7 @@ fn direct_to_native(request: DirectRequest) -> Result<crate::engine::Request> {
         tokens: request.tokens,
         max_output_tokens: request.max_output_tokens,
         output_token_ids: request.output_token_ids,
+        retention,
     })
 }
 

@@ -8,6 +8,7 @@
 
 use uuid::Uuid;
 
+use crate::engine::RetentionHint;
 use crate::engine::belady::BeladyOracle;
 use crate::engine::common::protocols::{KvEventPublishers, PrefillCost};
 use crate::engine::common::sequence::RequestSequence;
@@ -70,6 +71,10 @@ pub(crate) struct G1Manager {
 }
 
 impl G1Manager {
+    pub(crate) fn advance_time(&mut self, now_ms: f64) {
+        self.inner.advance_time(now_ms);
+    }
+
     pub(crate) fn set_grouped_cache(&mut self, groups: GroupedKvPool) {
         self.inner.set_grouped_cache(groups);
     }
@@ -255,6 +260,15 @@ impl G1Manager {
 
     pub(crate) fn finish_native(&mut self, owner: Uuid, lease: BlockRequestLease) {
         self.inner.finish_lease(owner, lease);
+    }
+
+    pub(crate) fn retain_lease(
+        &mut self,
+        lease: &BlockRequestLease,
+        now_ms: f64,
+        hint: RetentionHint,
+    ) -> bool {
+        self.inner.retain_lease(lease, now_ms, hint)
     }
 
     pub(crate) fn get_native_prefill_cost(

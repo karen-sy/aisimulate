@@ -103,6 +103,7 @@ impl PlacementPolicy<ReplayRequestPayload> for MismatchedPlacement {
                 scheduler_id: 0,
                 reported_overlap_tokens: 0,
                 cache_sample: None,
+                retention: None,
                 placement_replica_id: None,
             }),
             released: Vec::new(),

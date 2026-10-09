@@ -507,6 +507,7 @@ fn core_request(request: Request) -> DirectRequest {
         tokens: request.tokens,
         max_output_tokens: request.max_output_tokens,
         output_token_ids: request.output_token_ids,
+        retention: request.retention,
         uuid: Some(request.request_id),
         arrival_timestamp_ms: None,
     }
@@ -762,6 +763,7 @@ mod tests {
             let first = Uuid::from_u128(94_001);
             rank.apply_command_effects(
                 Command::Submit(Request {
+                    retention: None,
                     request_id: first,
                     tokens: vec![1, 2, 3, 4],
                     max_output_tokens: 20,
@@ -782,6 +784,7 @@ mod tests {
             let second = Uuid::from_u128(94_002);
             rank.apply_command_effects(
                 Command::Submit(Request {
+                    retention: None,
                     request_id: second,
                     tokens: (10..22).collect(),
                     max_output_tokens: 1,
@@ -921,6 +924,7 @@ mod tests {
         let effects = rank
             .apply_command_effects(
                 Command::Submit(Request {
+                    retention: None,
                     request_id,
                     tokens,
                     max_output_tokens: 0,
@@ -965,6 +969,7 @@ mod tests {
                 Command::SubmitHandoffPrefill {
                     handoff_id,
                     request: Request {
+                        retention: None,
                         request_id: restore_id,
                         tokens: vec![1, 2, 3, 4],
                         max_output_tokens: 0,
@@ -993,6 +998,7 @@ mod tests {
         let effects = rank
             .apply_command_effects(
                 Command::Submit(Request {
+                    retention: None,
                     request_id,
                     tokens: vec![1, 2, 3, 4],
                     max_output_tokens: output_token_ids.len(),
@@ -1110,6 +1116,7 @@ mod tests {
         let submission = rank
             .apply_command_effects(
                 Command::Submit(Request {
+                    retention: None,
                     request_id: busy_id,
                     tokens: vec![21, 22, 23, 24],
                     max_output_tokens: 0,
@@ -1131,6 +1138,7 @@ mod tests {
         let arrival = rank
             .apply_command_effects(
                 Command::Submit(Request {
+                    retention: None,
                     request_id: arrival_id,
                     tokens: vec![31, 32, 33, 34],
                     max_output_tokens: 0,
@@ -1188,6 +1196,7 @@ mod tests {
         let error = rank
             .apply_command_effects(
                 Command::Submit(Request {
+                    retention: None,
                     request_id: restore_id,
                     tokens: vec![41, 42, 43, 44],
                     max_output_tokens: 0,
@@ -1244,6 +1253,7 @@ mod tests {
             let effects = rank
                 .apply_command_effects(
                     Command::Submit(Request {
+                        retention: None,
                         request_id: *request_id,
                         tokens: tokens.clone(),
                         max_output_tokens: 0,
@@ -1281,6 +1291,7 @@ mod tests {
             let busy_id = Uuid::from_u128(94_000 + u128::from(cancel_source));
             rank.apply_command_effects(
                 Command::Submit(Request {
+                    retention: None,
                     request_id: busy_id,
                     tokens: vec![21, 22, 23, 24],
                     max_output_tokens: 0,
@@ -1372,6 +1383,7 @@ mod tests {
                 Command::ReserveDestination {
                     handoff_id,
                     request: Request {
+                        retention: None,
                         request_id,
                         tokens: vec![1, 2, 3, 4],
                         max_output_tokens: 1,
@@ -1440,6 +1452,7 @@ mod tests {
             let effects = rank
                 .apply_command_effects(
                     Command::Submit(Request {
+                        retention: None,
                         request_id,
                         tokens,
                         max_output_tokens: 8,
@@ -1495,6 +1508,7 @@ mod tests {
                 Command::SubmitHandoffPrefill {
                     handoff_id,
                     request: Request {
+                        retention: None,
                         request_id,
                         tokens: vec![1, 2, 3, 4],
                         max_output_tokens: 1,
@@ -1587,6 +1601,7 @@ mod tests {
                 Command::ReserveDestination {
                     handoff_id: historical_handoff,
                     request: Request {
+                        retention: None,
                         request_id: history,
                         tokens: (1..=9).collect(),
                         max_output_tokens: 2,
@@ -1635,6 +1650,7 @@ mod tests {
                 Command::SubmitHandoffPrefill {
                     handoff_id: consumer_handoff,
                     request: Request {
+                        retention: None,
                         request_id: consumer,
                         tokens: (1..=9).collect(),
                         max_output_tokens: 1,

@@ -126,12 +126,14 @@ fn request(
         uuid: Some(Uuid::from_u128(ordinal)),
         arrival_timestamp_ms: Some((ordinal - 1) as f64 * 1000.0),
         replay_context: Some(ReplayRequestContext {
+            retention: None,
             authored_id: identity.request_id.clone(),
             session_id: Some(identity.conversation_id.clone()),
             turn_index: None,
             metadata: serde_json::Value::Null,
             prompt_token_source: ReplayPromptTokenSource::Materialized,
             agentic: Some(identity),
+            continuation_expected: false,
         }),
         ..Default::default()
     }

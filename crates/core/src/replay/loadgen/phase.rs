@@ -294,12 +294,14 @@ impl AgenticPreparation {
                 strict_priority: source.strict_priority,
                 policy_class: source.policy_class.clone(),
                 replay_context: Some(ReplayRequestContext {
+                    retention: None,
                     authored_id: evidence.source_request_id.clone(),
                     session_id: Some(evidence.identity.conversation_id.clone()),
                     turn_index: Some(ordinal),
                     metadata: serde_json::json!({"agentic_phase": evidence.phase}),
                     prompt_token_source: ReplayPromptTokenSource::Materialized,
                     agentic: Some(evidence.identity.clone()),
+                    continuation_expected: false,
                 }),
                 ..Default::default()
             };

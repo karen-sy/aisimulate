@@ -23,7 +23,7 @@ use crate::engine::common::hashing::{
 use crate::engine::common::kv_cache_trace;
 use crate::engine::common::protocols::{KvEventPublishers, PrefillCost, SchedulingPolicy};
 use crate::engine::common::sequence::{BlockIdentity, RequestSequence};
-use crate::engine::{KvBlock, KvEvent, KvEventData, KvEventTier, StoredBlocks};
+use crate::engine::{KvBlock, KvEvent, KvEventData, KvEventTier, RetentionHint, StoredBlocks};
 
 /// Apply vLLM's EAGLE/MTP prefix-cache rule.
 ///
@@ -378,6 +378,10 @@ pub(crate) struct VllmKvManager {
 }
 
 impl VllmKvManager {
+    pub(crate) fn advance_time(&mut self, now_ms: f64) {
+        self.pool.advance_time(now_ms);
+    }
+
     pub(crate) fn set_grouped_cache(&mut self, grouped: GroupedKvPool) {
         assert!(!self.enable_prefix_caching);
         self.grouped = Some(grouped);
@@ -1336,6 +1340,23 @@ impl VllmKvManager {
         lease.debug_assert_owner(owner);
         self.release_lease_entries(&mut lease);
         lease.allocated_tokens = 0;
+    }
+
+    pub(crate) fn retain_lease(
+        &mut self,
+        lease: &BlockRequestLease,
+        now_ms: f64,
+        hint: RetentionHint,
+    ) -> bool {
+        if self.grouped.is_some() {
+            return false;
+        }
+        self.pool.retain(
+            lease.entries.iter().filter_map(|entry| entry.copy),
+            now_ms,
+            hint.ttl_ms,
+            hint.max_blocks,
+        )
     }
 
     fn release_lease_entries(&mut self, lease: &mut BlockRequestLease) {

@@ -280,6 +280,23 @@ where
         Ok(())
     }
 
+    fn apply_retention(request: &mut DirectRequest, placement: &Placement) -> anyhow::Result<()> {
+        let Some(retention) = placement.retention else {
+            return Ok(());
+        };
+        request
+            .replay_context
+            .as_mut()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "retention placement for {} requires replay request context",
+                    placement.request_id
+                )
+            })?
+            .retention = Some(retention);
+        Ok(())
+    }
+
     fn record_placement(&mut self, placement: Placement) {
         if let Some(sample) = placement.cache_sample {
             self.traffic
@@ -312,13 +329,14 @@ where
                 placement.cache_sample,
                 placement.placement_replica_id,
             );
-            let request = self
+            let mut request = self
                 .requests
                 .get_mut(&uuid)
                 .ok_or_else(|| {
                     anyhow::anyhow!("offline replay missing queued request state for {uuid}")
                 })?
                 .take_queued_request(uuid, placement.scheduler_id)?;
+            Self::apply_retention(&mut request, &placement)?;
             self.dispatch_to_worker(request, uuid, placement.scheduler_id)?;
         }
         Ok(())
@@ -350,6 +368,9 @@ where
                 "offline placement returned request {} while placing {uuid}",
                 placement.request_id
             );
+        }
+        if let PlacementDecision::Immediate(placement) = &effects.decision {
+            Self::apply_retention(request.metadata_mut(), placement)?;
         }
         self.collector
             .try_on_arrival(uuid, arrival_time_ms, input_length, output_length)?;
@@ -2487,6 +2508,7 @@ mod host_offload_tests {
                     scheduler_id,
                     reported_overlap_tokens: 0,
                     cache_sample: None,
+                    retention: None,
                     placement_replica_id: None,
                 }),
                 released: Vec::new(),
@@ -2527,6 +2549,7 @@ mod host_offload_tests {
                     scheduler_id: 1,
                     reported_overlap_tokens: 0,
                     cache_sample: None,
+                    retention: None,
                     placement_replica_id: None,
                 })
                 .collect())

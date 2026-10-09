@@ -737,12 +737,14 @@ fn lower_requests(
                 strict_priority: routing.strict_priority,
                 policy_class: routing.policy_class,
                 replay_context: Some(ReplayRequestContext {
+                    retention: None,
                     authored_id: request.id.clone(),
                     session_id: request.session_id.clone(),
                     turn_index: request.turn_index,
                     metadata: request.metadata.clone(),
                     prompt_token_source,
                     agentic: None,
+                    continuation_expected: false,
                 }),
             })
         })

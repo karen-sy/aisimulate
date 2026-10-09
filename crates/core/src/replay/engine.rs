@@ -685,6 +685,7 @@ mod observation_tests {
             scheduler_id,
             reported_overlap_tokens: 0,
             cache_sample: None,
+            retention: None,
             placement_replica_id: None,
         }
     }

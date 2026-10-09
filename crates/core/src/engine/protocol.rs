@@ -8,6 +8,15 @@ use uuid::Uuid;
 
 use super::{HandoffId, HandoffTransferTiming};
 
+/// Soft, bounded protection applied to one request's reusable G1 blocks at completion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RetentionHint {
+    /// Lease duration beginning when generation completes.
+    pub ttl_ms: u64,
+    /// Worker-local ceiling for blocks protected by retention hints.
+    pub max_blocks: usize,
+}
+
 /// Runtime-neutral request accepted by the rank engine.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Request {
@@ -22,6 +31,9 @@ pub struct Request {
     /// output position, so reusing a request ID reproduces the same stream.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_token_ids: Option<Vec<u32>>,
+    /// Optional completion-time G1 retention request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retention: Option<RetentionHint>,
 }
 
 /// Commands supported by the standalone scheduler.

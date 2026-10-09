@@ -99,6 +99,12 @@ struct SourceReuseTracker {
     released: FxHashSet<BlockCopyId>,
 }
 
+#[derive(Default)]
+struct RetentionState {
+    now_ms: f64,
+    by_copy: FxHashMap<BlockCopyId, f64>,
+}
+
 struct HashCopies {
     primary: BlockCopyId,
     // Keep the common one-copy value to two machine words; duplicate hashes
@@ -355,6 +361,8 @@ pub(crate) struct VllmBlockPool {
     /// See [`Self::hold_pending_sources`].
     hold_sources: bool,
     belady: Option<Box<BeladyCandidates>>,
+    /// Allocated only when completion-time retention is exercised.
+    retention: Option<Box<RetentionState>>,
 }
 
 impl VllmBlockPool {
@@ -374,7 +382,66 @@ impl VllmBlockPool {
             source_reuse: None,
             hold_sources: false,
             belady: None,
+            retention: None,
         }
+    }
+
+    pub(crate) fn advance_time(&mut self, now_ms: f64) {
+        assert!(now_ms.is_finite() && now_ms >= 0.0);
+        let Some(retention) = self.retention.as_deref_mut() else {
+            return;
+        };
+        assert!(
+            now_ms >= retention.now_ms,
+            "block-pool retention clock moved backwards"
+        );
+        retention.now_ms = now_ms;
+        let copies = &self.copies;
+        retention
+            .by_copy
+            .retain(|id, expires_at_ms| *expires_at_ms > now_ms && copies.contains_key(*id));
+    }
+
+    /// Apply one all-or-nothing soft retention lease to resident cached copies.
+    pub(crate) fn retain(
+        &mut self,
+        copies: impl IntoIterator<Item = BlockCopyId>,
+        now_ms: f64,
+        ttl_ms: u64,
+        max_blocks: usize,
+    ) -> bool {
+        assert!(now_ms.is_finite() && now_ms >= 0.0);
+        if ttl_ms == 0 || max_blocks == 0 {
+            return false;
+        }
+        let candidates = copies
+            .into_iter()
+            .filter(|id| {
+                self.copies
+                    .get(*id)
+                    .is_some_and(|copy| matches!(&copy.state, CopyState::Cached { .. }))
+            })
+            .collect::<FxHashSet<_>>();
+        if candidates.is_empty() {
+            return false;
+        }
+        let retention = self.retention.get_or_insert_with(Default::default);
+        let new_blocks = candidates
+            .iter()
+            .filter(|id| !retention.by_copy.contains_key(id))
+            .count();
+        if retention.by_copy.len().saturating_add(new_blocks) > max_blocks.min(self.capacity) {
+            return false;
+        }
+        let expires_at_ms = now_ms + ttl_ms as f64;
+        for id in candidates {
+            retention
+                .by_copy
+                .entry(id)
+                .and_modify(|existing| *existing = existing.max(expires_at_ms))
+                .or_insert(expires_at_ms);
+        }
+        true
     }
 
     /// Hold every copy a pending transfer reads until that transfer is
@@ -1615,8 +1682,13 @@ impl VllmBlockPool {
     fn evict_one(&mut self) -> EvictedCapacity {
         self.sync_belady_candidates();
         let victim = match &self.belady {
-            Some(belady) => belady.ranked.first().map(|candidate| candidate.id),
-            None => self.inactive_head,
+            Some(belady) => belady
+                .ranked
+                .iter()
+                .find(|candidate| !self.is_retained(candidate.id))
+                .or_else(|| belady.ranked.first())
+                .map(|candidate| candidate.id),
+            None => self.oldest_unretained().or(self.inactive_head),
         };
         let Some(id) = victim else {
             panic!("prechecked inactive capacity disappeared")
@@ -1636,6 +1708,9 @@ impl VllmBlockPool {
         let Some(copy) = self.copies.remove(id) else {
             panic!("inactive LRU points to a missing copy")
         };
+        if let Some(retention) = self.retention.as_deref_mut() {
+            retention.by_copy.remove(&id);
+        }
         let source_reuse = self.take_copy_source_reuse(id);
         let CopyState::Cached {
             hash, refs, pins, ..
@@ -1660,6 +1735,29 @@ impl VllmBlockPool {
             removed_hash,
             source_reuse,
         }
+    }
+
+    fn is_retained(&self, id: BlockCopyId) -> bool {
+        self.retention.as_ref().is_some_and(|retention| {
+            retention
+                .by_copy
+                .get(&id)
+                .is_some_and(|expires_at_ms| *expires_at_ms > retention.now_ms)
+        })
+    }
+
+    fn oldest_unretained(&self) -> Option<BlockCopyId> {
+        let mut cursor = self.inactive_head;
+        while let Some(id) = cursor {
+            if !self.is_retained(id) {
+                return Some(id);
+            }
+            let CopyState::Cached { inactive_next, .. } = &self.copies[id].state else {
+                unreachable!("inactive LRU points to a private copy")
+            };
+            cursor = *inactive_next;
+        }
+        None
     }
 }
 
@@ -1704,6 +1802,71 @@ mod tests {
     fn cache_copy(pool: &mut VllmBlockPool, hash: SequenceHash) -> BlockCopyId {
         let mut reservation = reserve(pool, &[], 1).reservation;
         pool.allocate_cached(&mut reservation, hash).0
+    }
+
+    #[test]
+    fn retention_prefers_evicting_an_unretained_block() {
+        let mut pool = VllmBlockPool::new(3);
+        let retained = cache_copy(&mut pool, 7);
+        pool.release(retained);
+        let ordinary = cache_copy(&mut pool, 8);
+        pool.release(ordinary);
+
+        assert!(pool.retain([retained], 0.0, 100, 1));
+        let pressure = reserve(&mut pool, &[], 2);
+
+        assert_eq!(pressure.removed, vec![8]);
+        assert!(pool.prefix_hit(7).is_some());
+        pool.cancel(pressure.reservation);
+        pool.assert_lru_consistent();
+    }
+
+    #[test]
+    fn expired_retention_restores_ordinary_lru_order() {
+        let mut pool = VllmBlockPool::new(3);
+        let oldest = cache_copy(&mut pool, 7);
+        pool.release(oldest);
+        let newer = cache_copy(&mut pool, 8);
+        pool.release(newer);
+
+        assert!(pool.retain([oldest], 0.0, 10, 1));
+        pool.advance_time(10.0);
+        let pressure = reserve(&mut pool, &[], 2);
+
+        assert_eq!(pressure.removed, vec![7]);
+        assert!(pool.prefix_hit(8).is_some());
+        pool.cancel(pressure.reservation);
+        pool.assert_lru_consistent();
+    }
+
+    #[test]
+    fn future_completion_lease_does_not_advance_replay_clock() {
+        let mut pool = VllmBlockPool::new(2);
+        let retained = cache_copy(&mut pool, 7);
+        pool.release(retained);
+
+        // A simulated engine pass can calculate completion before global replay
+        // time reaches it. The lease begins at completion, while expiry remains
+        // driven by subsequent replay boundaries.
+        assert!(pool.retain([retained], 100.0, 10, 1));
+        pool.advance_time(50.0);
+        assert!(pool.is_retained(retained));
+        pool.advance_time(110.0);
+        assert!(!pool.is_retained(retained));
+    }
+
+    #[test]
+    fn retention_cap_rejects_the_whole_lease() {
+        let mut pool = VllmBlockPool::new(3);
+        let first = cache_copy(&mut pool, 7);
+        pool.release(first);
+        let second = cache_copy(&mut pool, 8);
+        pool.release(second);
+
+        assert!(pool.retain([first], 0.0, 100, 1));
+        assert!(!pool.retain([first, second], 1.0, 100, 1));
+        assert!(pool.is_retained(first));
+        assert!(!pool.is_retained(second));
     }
 
     #[test]

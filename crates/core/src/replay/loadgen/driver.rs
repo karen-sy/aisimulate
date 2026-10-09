@@ -2213,20 +2213,28 @@ impl WorkloadDriver {
                 continue;
             };
             let request_uuid = self.request_uuid(session_index, turn_index);
-            let agentic_identity = match &self.policy {
-                SchedulingPolicy::Agentic(state) => Some(state.identities[session_index].clone()),
-                SchedulingPolicy::Trace | SchedulingPolicy::Concurrency(_) => None,
+            let (agentic_identity, continuation_expected) = match &self.policy {
+                SchedulingPolicy::Agentic(state) => (
+                    Some(state.identities[session_index].clone()),
+                    !state.completion_dependents[session_index].is_empty(),
+                ),
+                SchedulingPolicy::Trace | SchedulingPolicy::Concurrency(_) => (
+                    None,
+                    turn_index + 1 < self.sessions[session_index].turns.len(),
+                ),
             };
             let session = &mut self.sessions[session_index];
             let turn = &mut session.turns[turn_index];
             let replay_context = turn.request_id.as_ref().zip(turn.play_id.as_ref()).map(
                 |(request_id, _play_id)| ReplayRequestContext {
+                    retention: None,
                     authored_id: request_id.clone(),
                     session_id: Some(session.session_id.clone()),
                     turn_index: None,
                     metadata: serde_json::Value::Null,
                     prompt_token_source: ReplayPromptTokenSource::Materialized,
                     agentic: agentic_identity,
+                    continuation_expected,
                 },
             );
             let arrival_timestamp_ms = self.policy.arrival_timestamp_ms(scheduled_ready_at_ms);

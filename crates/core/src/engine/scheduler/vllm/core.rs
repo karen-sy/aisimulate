@@ -40,7 +40,7 @@ use crate::engine::scheduler::{
 use crate::engine::trace::TraceCollector;
 use crate::engine::{
     CacheTierAttribution, DecodeAcceptance, G2Scope, HandoffId, PressureEvent, PressureKind,
-    PressureState, modeled_duration_ms,
+    PressureState, RetentionHint, modeled_duration_ms,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +70,7 @@ pub(crate) struct VllmRequestState {
     pub(crate) cached_prefix_tokens: Option<usize>,
     /// Whether the admission cache truth was already attached to a signal.
     pub(crate) cached_tokens_signaled: bool,
+    retention: Option<RetentionHint>,
     // Keep the ordinary request footprint small. Native host-offload state
     // contains transfer ownership and a destination reservation, so embedding
     // its enum inline would charge every request even when the profile is off.
@@ -956,6 +957,9 @@ impl VllmCore {
         allow_destination_admission: bool,
         command_now_ms: Option<f64>,
     ) -> anyhow::Result<SchedulerCommandEffects> {
+        if let Some(now_ms) = command_now_ms {
+            self.kv_manager.advance_time(now_ms);
+        }
         // Commands and deadline settlement are separate generalized-engine
         // boundaries. Settling here would mutate host residency before a
         // fallible command is validated, violating RankEngine error atomicity.
@@ -1351,6 +1355,7 @@ impl VllmCore {
         let requested_max_output_tokens = request.max_output_tokens;
         let mut max_output_tokens = request.effective_max_output_tokens();
         let planned_output_ids = request.output_token_ids;
+        let retention = request.retention;
         if planned_output_ids.is_some() && max_output_tokens != requested_max_output_tokens {
             tracing::warn!(
                 %uuid,
@@ -1414,6 +1419,7 @@ impl VllmCore {
             num_preemptions: 0,
             cached_prefix_tokens: None,
             cached_tokens_signaled: false,
+            retention,
             host_offload,
         }
     }
@@ -1452,7 +1458,13 @@ impl VllmCore {
         }
     }
 
-    fn complete_source(&mut self, uuid: Uuid) {
+    fn complete_source(&mut self, uuid: Uuid, completed_at_ms: f64) {
+        if let Some(request) = self.state.requests.get(&uuid)
+            && let Some(retention) = request.retention
+        {
+            self.kv_manager
+                .retain_lease(&request.sequence.lease, completed_at_ms, retention);
+        }
         let transfer_timing = self.state.requests.get(&uuid).map(|request| {
             prefill_handoff_transfer_timing(
                 request.sequence.num_input_tokens(),
@@ -1787,6 +1799,7 @@ impl VllmCore {
         mut collector: Option<&mut TraceCollector>,
         now_ms: f64,
     ) -> anyhow::Result<EnginePassResult> {
+        self.kv_manager.advance_time(now_ms);
         #[cfg(test)]
         let requests_before = self.state.requests.len();
         let g3_epoch_before = self.native_host_offload.as_ref().and_then(|a| a.g3_epoch());
@@ -2926,7 +2939,7 @@ impl VllmCore {
                 .requests
                 .get_mut(&uuid)
                 .and_then(VllmRequestState::take_cached_tokens_for_signal);
-            self.complete_source(uuid);
+            self.complete_source(uuid, decode_start_ms);
             output_signals.push(OutputSignal {
                 uuid,
                 token_id: None,
@@ -3035,7 +3048,7 @@ impl VllmCore {
                 cached_tokens,
             };
             if completed {
-                self.complete_source(uuid);
+                self.complete_source(uuid, decode_end_ms);
                 running_changed = true;
             }
             if let Some(collector) = collector.as_deref_mut() {
@@ -3281,7 +3294,7 @@ impl VllmCore {
             }
 
             if completed {
-                self.complete_source(uuid);
+                self.complete_source(uuid, decode_end_ms);
                 running_changed = true;
                 continue;
             }

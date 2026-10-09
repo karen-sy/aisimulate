@@ -44,7 +44,7 @@ pub use protocol::{
     Admission, CacheTierAttribution, Command, CommandEffects, CommandResult, DecodeAcceptance,
     ForwardPassMetrics, KvBlock, KvEvent, KvEventData, KvEventTier, LifecycleEvent, Metrics,
     Output, PassCompletionEffects, PassStartEffects, PressureEvent, PressureKind, PressureState,
-    Request, StoredBlocks,
+    Request, RetentionHint, StoredBlocks,
 };
 pub use runtime::{Engine, EngineFactory};
 pub use scheduler::SchedulerRank;

@@ -74,6 +74,8 @@ pub struct Placement {
     pub scheduler_id: usize,
     pub reported_overlap_tokens: usize,
     pub cache_sample: Option<PlacementCacheSample>,
+    /// Optional completion-time cache action resolved by the placement policy.
+    pub retention: Option<crate::engine::RetentionHint>,
     /// Placement-policy replica that made the decision, when the policy has replicas.
     pub placement_replica_id: Option<usize>,
 }

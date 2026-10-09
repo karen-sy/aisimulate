@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::engine::RetentionHint;
+
 /// Stable Agentic correlation data carried across replay-owned boundaries.
 ///
 /// The static graph already owns request, play, and conversation identity.
@@ -61,6 +63,12 @@ pub struct ReplayRequestContext {
     pub prompt_token_source: ReplayPromptTokenSource,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agentic: Option<AgenticRuntimeIdentity>,
+    /// The workload can causally continue after this request completes.
+    #[serde(default)]
+    pub continuation_expected: bool,
+    /// Optional cache policy already resolved by the replay workload adapter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retention: Option<RetentionHint>,
 }
 
 /// One materialized replay request before it enters a generalized engine.

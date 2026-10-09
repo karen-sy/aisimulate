@@ -279,6 +279,7 @@ mod vllm {
         let mut core = VllmCore::new(args);
         let seed = Uuid::from_u128(750);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 1,
             uuid: Some(seed),
@@ -298,6 +299,7 @@ mod vllm {
 
         let repeated = Uuid::from_u128(751);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 1,
             uuid: Some(repeated),
@@ -410,6 +412,7 @@ mod vllm {
         let mut core = VllmCore::new_with_kv_capture(args, 1);
         let uuid = Uuid::from_u128(103);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 1,
             uuid: Some(uuid),
@@ -488,6 +491,7 @@ mod vllm {
         let second_uuid = Uuid::from_u128(105);
         for uuid in [first_uuid, second_uuid] {
             core.receive(DirectRequest {
+                retention: None,
                 tokens: (0..8).collect(),
                 max_output_tokens: 2,
                 uuid: Some(uuid),
@@ -546,6 +550,7 @@ mod vllm {
         let mut core = VllmCore::new(args);
         let seed = Uuid::from_u128(105_001);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..104).collect(),
             max_output_tokens: 0,
             uuid: Some(seed),
@@ -559,12 +564,14 @@ mod vllm {
         let evictor = Uuid::from_u128(105_002);
         let former_hit = Uuid::from_u128(105_003);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..12).collect(),
             max_output_tokens: 0,
             uuid: Some(evictor),
             ..Default::default()
         });
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..104).collect(),
             max_output_tokens: 0,
             uuid: Some(former_hit),
@@ -604,6 +611,7 @@ mod vllm {
         let mut core = VllmCore::new_with_kv_capture(args, 1);
         let running = Uuid::from_u128(106);
         core.receive(DirectRequest {
+            retention: None,
             tokens: vec![0, 1, 2],
             max_output_tokens: 2,
             output_token_ids: Some(vec![3, 9]),
@@ -619,6 +627,7 @@ mod vllm {
 
         let waiting = Uuid::from_u128(107);
         core.receive(DirectRequest {
+            retention: None,
             tokens: vec![0, 1, 2, 3, 4],
             max_output_tokens: 1,
             uuid: Some(waiting),
@@ -661,6 +670,7 @@ mod vllm {
         let second = Uuid::from_u128(109);
         for (uuid, base) in [(first, 0), (second, 100)] {
             core.receive(DirectRequest {
+                retention: None,
                 tokens: (base..base + 4).collect(),
                 max_output_tokens: 3,
                 output_token_ids: Some(vec![base + 4, base + 5, base + 6]),
@@ -723,6 +733,7 @@ mod vllm {
 
         let seed = Uuid::from_u128(110);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 1,
             output_token_ids: Some(vec![8]),
@@ -748,6 +759,7 @@ mod vllm {
         // slot, it would also evict the reusable seed head.
         let unrelated = Uuid::from_u128(111);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..104).collect(),
             max_output_tokens: 1,
             output_token_ids: Some(vec![104]),
@@ -764,6 +776,7 @@ mod vllm {
 
         let probe = Uuid::from_u128(112);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..5).collect(),
             max_output_tokens: 1,
             output_token_ids: Some(vec![5]),
@@ -802,6 +815,7 @@ mod vllm {
         let mut core = VllmCore::new(args);
         let uuid = Uuid::from_u128(1);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..prompt_len).collect(),
             max_output_tokens: 1,
             uuid: Some(uuid),
@@ -836,6 +850,7 @@ mod vllm {
         let mut core = VllmCore::new(args);
         let uuid = Uuid::from_u128(2);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..7).collect(),
             max_output_tokens: 4,
             uuid: Some(uuid),
@@ -873,6 +888,7 @@ mod vllm {
         let mut core = VllmCore::new(args);
         let uuid = Uuid::from_u128(3);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..5).collect(),
             max_output_tokens: 8,
             uuid: Some(uuid),
@@ -935,6 +951,7 @@ mod trtllm {
 
     fn receive(core: &mut VllmCore, uuid: Uuid, tokens: std::ops::Range<u32>, max_output: usize) {
         core.receive(DirectRequest {
+            retention: None,
             tokens: tokens.collect(),
             max_output_tokens: max_output,
             output_token_ids: None,

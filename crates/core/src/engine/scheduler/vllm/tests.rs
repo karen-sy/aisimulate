@@ -78,6 +78,7 @@ fn belady_retires_committed_chunk_but_keeps_queued_demand(#[case] engine_type: E
     core.set_belady_oracle(oracle.clone());
     for (uuid, tokens) in [(first, first_tokens), (queued, queued_tokens)] {
         core.receive(DirectRequest {
+            retention: None,
             tokens,
             max_output_tokens: 1,
             uuid: Some(uuid),
@@ -123,6 +124,7 @@ fn belady_retires_full_hit_zero_output_requests(#[case] engine_type: EngineType)
 
     for (uuid, expected_next) in [(first, 1), (second, usize::MAX)] {
         core.receive(DirectRequest {
+            retention: None,
             tokens: tokens.clone(),
             max_output_tokens: 0,
             uuid: Some(uuid),
@@ -157,6 +159,7 @@ fn belady_retires_terminal_rejection_without_computing_prompt(#[case] engine_typ
     let oracle = BeladyOracle::new(vec![(uuid, hashes.clone())]).unwrap();
     core.set_belady_oracle(oracle.clone());
     core.receive(DirectRequest {
+        retention: None,
         tokens,
         max_output_tokens: 0,
         uuid: Some(uuid),
@@ -192,6 +195,7 @@ fn shared_vllm_core_exposes_kv_events_at_pass_end(#[case] engine_type: EngineTyp
         .unwrap();
     let mut core = VllmCore::new_with_kv_capture(args, 7);
     core.receive(DirectRequest {
+        retention: None,
         tokens: (0..8).collect(),
         max_output_tokens: 2,
         uuid: Some(Uuid::from_u128(71)),
@@ -211,6 +215,7 @@ fn engine_adapter_constructs_native_request_state() {
     let mut core = VllmCore::new(prefix_cache_args());
     let uuid = Uuid::from_u128(80_100);
     core.receive(DirectRequest {
+        retention: None,
         tokens: (0..8).collect(),
         max_output_tokens: 2,
         uuid: Some(uuid),
@@ -225,6 +230,7 @@ fn ordinary_vllm_requests_keep_host_state_lazy_and_skip_connector_queue() {
     let mut core = VllmCore::new(prefix_cache_args());
     for (uuid, start) in [(80_101_u128, 0_u32), (80_102, 100)] {
         core.receive(DirectRequest {
+            retention: None,
             tokens: (start..start + 8).collect(),
             max_output_tokens: 2,
             uuid: Some(Uuid::from_u128(uuid)),
@@ -271,6 +277,7 @@ fn flat_tokens_cover_every_native_g1_configuration() {
                 let uuid = Uuid::from_u128(next_uuid);
                 next_uuid += 1;
                 core.receive(DirectRequest {
+                    retention: None,
                     tokens: (0..9).collect(),
                     max_output_tokens: 2,
                     uuid: Some(uuid),
@@ -302,6 +309,7 @@ fn minimum_shared_scheduler_block_size_constructs_requests_for_both_backends() {
         let mut core = VllmCore::new(args);
         let uuid = Uuid::from_u128(80_200 + case as u128);
         core.receive(DirectRequest {
+            retention: None,
             tokens: vec![0],
             max_output_tokens: 1,
             output_token_ids: Some(vec![1]),
@@ -349,6 +357,7 @@ fn flat_storage_capacity_is_bounded_by_realizable_output() {
 fn zero_output_request_completes_after_prefill(#[case] engine_type: EngineType) {
     let mut core = VllmCore::new(make_args_for_engine(engine_type));
     let uuid = core.receive(DirectRequest {
+        retention: None,
         tokens: vec![1, 2, 3, 4],
         max_output_tokens: 0,
         uuid: Some(Uuid::from_u128(90_001)),
@@ -384,6 +393,7 @@ fn fully_cached_zero_output_request_is_not_decode_fpm_work() {
     let mut collector = crate::engine::trace::TraceCollector::default();
 
     core.receive(DirectRequest {
+        retention: None,
         tokens: tokens.clone(),
         max_output_tokens: 0,
         uuid: Some(Uuid::from_u128(90_002)),
@@ -393,6 +403,7 @@ fn fully_cached_zero_output_request_is_not_decode_fpm_work() {
     assert_eq!(seed_pass.completed_requests, 1);
 
     let uuid = core.receive(DirectRequest {
+        retention: None,
         tokens,
         max_output_tokens: 0,
         uuid: Some(Uuid::from_u128(90_003)),
@@ -434,12 +445,14 @@ fn speculative_batch_drains_zero_output_before_emitting_tokens() {
         .unwrap();
     let mut core = VllmCore::new(args);
     let zero_uuid = core.receive(DirectRequest {
+        retention: None,
         tokens: vec![1, 2, 3, 4],
         max_output_tokens: 0,
         uuid: Some(Uuid::from_u128(90_002)),
         ..Default::default()
     });
     let normal_uuid = core.receive(DirectRequest {
+        retention: None,
         tokens: vec![5, 6, 7, 8],
         max_output_tokens: 3,
         uuid: Some(Uuid::from_u128(90_003)),
@@ -493,6 +506,7 @@ fn speculative_retraction_preserves_only_executed_work(
     let retracted = Uuid::from_u128(91_002);
     for (uuid, tokens) in [(survivor, vec![1; 4]), (retracted, vec![2; 4])] {
         core.receive(DirectRequest {
+            retention: None,
             tokens,
             max_output_tokens: 8,
             uuid: Some(uuid),
@@ -541,6 +555,7 @@ mod source_holds {
 
     fn request(uuid: Uuid) -> DirectRequest {
         DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 2,
             uuid: Some(uuid),
@@ -687,6 +702,7 @@ mod destination_lifecycle {
 
     fn request(uuid: Uuid, tokens: Vec<u32>, max_output_tokens: usize) -> DirectRequest {
         DirectRequest {
+            retention: None,
             tokens,
             max_output_tokens,
             uuid: Some(uuid),
@@ -1326,6 +1342,7 @@ mod core_behavior {
         output: usize,
     ) -> DirectRequest {
         DirectRequest {
+            retention: None,
             tokens: (prompt_start..prompt_start + prompt_len).collect(),
             max_output_tokens: output,
             uuid: Some(Uuid::from_u128(uuid)),
@@ -1496,6 +1513,7 @@ mod core_behavior {
         let uuid = Uuid::from_u128(0xA11CE);
         let planned = vec![101, 202, 303];
         core.receive(DirectRequest {
+            retention: None,
             tokens: vec![1, 2],
             max_output_tokens: planned.len(),
             output_token_ids: Some(planned.clone()),
@@ -1544,6 +1562,7 @@ mod core_behavior {
         let r1 = Uuid::from_u128(1);
         let r2 = Uuid::from_u128(2);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 2,
             output_token_ids: None,
@@ -1551,6 +1570,7 @@ mod core_behavior {
             arrival_timestamp_ms: None,
         });
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..108).collect(),
             max_output_tokens: 2,
             output_token_ids: None,
@@ -1607,6 +1627,7 @@ mod core_behavior {
         let r1 = Uuid::from_u128(1);
         let r2 = Uuid::from_u128(2);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 2,
             output_token_ids: None,
@@ -1614,6 +1635,7 @@ mod core_behavior {
             arrival_timestamp_ms: None,
         });
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..108).collect(),
             max_output_tokens: 2,
             output_token_ids: None,
@@ -1650,6 +1672,7 @@ mod core_behavior {
         let r2 = Uuid::from_u128(202);
         for (uuid, tokens) in [(r1, vec![1; 4]), (r2, vec![2; 4])] {
             core.receive(DirectRequest {
+                retention: None,
                 tokens,
                 max_output_tokens: 1,
                 output_token_ids: None,
@@ -1709,6 +1732,7 @@ mod core_behavior {
             .unwrap();
         let mut core = VllmCore::new(args);
         core.receive(DirectRequest {
+            retention: None,
             tokens: vec![1; 8],
             max_output_tokens: 1,
             output_token_ids: None,
@@ -1732,6 +1756,7 @@ mod core_behavior {
         let mut core = VllmCore::new(make_args());
         let uuid = Uuid::from_u128(11);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 2,
             output_token_ids: None,
@@ -1774,6 +1799,7 @@ mod core_behavior {
         let r2 = Uuid::from_u128(2);
         for (uuid, range) in [(r1, 0u32..8u32), (r2, 100u32..108u32)] {
             core.receive(DirectRequest {
+                retention: None,
                 tokens: range.collect(),
                 max_output_tokens: 8,
                 output_token_ids: None,
@@ -1819,6 +1845,7 @@ mod core_behavior {
         let blocked = Uuid::from_u128(2);
         let follower = Uuid::from_u128(3);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..16).collect(),
             max_output_tokens: 1,
             output_token_ids: None,
@@ -1826,6 +1853,7 @@ mod core_behavior {
             arrival_timestamp_ms: None,
         });
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..112).collect(),
             max_output_tokens: 1,
             output_token_ids: None,
@@ -1833,6 +1861,7 @@ mod core_behavior {
             arrival_timestamp_ms: None,
         });
         core.receive(DirectRequest {
+            retention: None,
             tokens: (200..204).collect(),
             max_output_tokens: 1,
             output_token_ids: None,
@@ -1903,6 +1932,7 @@ mod core_behavior {
         let follower = Uuid::from_u128(2);
         for (uuid, range) in [(oversized, 0u32..20u32), (follower, 100u32..104u32)] {
             core.receive(DirectRequest {
+                retention: None,
                 tokens: range.collect(),
                 max_output_tokens: 1,
                 output_token_ids: None,
@@ -1932,6 +1962,7 @@ mod core_behavior {
         let mut core = VllmCore::new(make_args());
         for uuid in [Uuid::from_u128(1), Uuid::from_u128(2)] {
             core.receive(DirectRequest {
+                retention: None,
                 tokens: (0..8).collect(),
                 max_output_tokens: 2,
                 output_token_ids: None,
@@ -1967,6 +1998,7 @@ mod core_behavior {
         let short = Uuid::from_u128(1);
         let long = Uuid::from_u128(2);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..4).collect(),
             max_output_tokens: 5,
             output_token_ids: None,
@@ -1974,6 +2006,7 @@ mod core_behavior {
             arrival_timestamp_ms: None,
         });
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..104).collect(),
             max_output_tokens: 8,
             output_token_ids: None,
@@ -2027,6 +2060,7 @@ mod core_behavior {
         let mut core = VllmCore::new(args);
         let uuid = Uuid::from_u128(3);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..3).collect(),
             max_output_tokens: 5,
             uuid: Some(uuid),
@@ -2065,6 +2099,7 @@ mod core_behavior {
             let mut collector = crate::engine::trace::TraceCollector::default();
 
             core.receive(DirectRequest {
+                retention: None,
                 tokens: (0..8).collect(),
                 max_output_tokens: 1,
                 output_token_ids: None,
@@ -2075,6 +2110,7 @@ mod core_behavior {
             assert!(core.is_empty());
 
             core.receive(DirectRequest {
+                retention: None,
                 tokens: (0..12).collect(),
                 max_output_tokens: 1,
                 output_token_ids: None,
@@ -2116,6 +2152,7 @@ mod forward_pass_metrics {
     fn test_fpm_single_prefill_request() {
         let mut core = VllmCore::new(fpm_args());
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 1,
             output_token_ids: None,
@@ -2143,6 +2180,7 @@ mod forward_pass_metrics {
         // r1: 4-token prompt, 3 output tokens
         let r1 = Uuid::from_u128(1);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..4).collect(),
             max_output_tokens: 3,
             output_token_ids: None,
@@ -2161,6 +2199,7 @@ mod forward_pass_metrics {
         // r2: 4-token prompt arriving while r1 is decoding
         let r2 = Uuid::from_u128(2);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..104).collect(),
             max_output_tokens: 3,
             output_token_ids: None,
@@ -2190,6 +2229,7 @@ mod forward_pass_metrics {
         // Request with 4-token prompt and 1 output token — completes in 1 pass
         let r1 = Uuid::from_u128(1);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..4).collect(),
             max_output_tokens: 1,
             output_token_ids: None,
@@ -2229,6 +2269,7 @@ mod forward_pass_metrics {
 
         let r1 = Uuid::from_u128(1);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..4).collect(),
             max_output_tokens: 2,
             output_token_ids: None,
@@ -2273,6 +2314,7 @@ mod forward_pass_metrics {
         let r1 = Uuid::from_u128(1);
         let r2 = Uuid::from_u128(2);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..8).collect(),
             max_output_tokens: 1,
             output_token_ids: None,
@@ -2280,6 +2322,7 @@ mod forward_pass_metrics {
             arrival_timestamp_ms: None,
         });
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..108).collect(),
             max_output_tokens: 1,
             output_token_ids: None,
@@ -2317,6 +2360,7 @@ mod forward_pass_metrics {
 
         // Two prefill requests with different prompt lengths
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..4).collect(), // prompt_len = 4
             max_output_tokens: 1,
             output_token_ids: None,
@@ -2324,6 +2368,7 @@ mod forward_pass_metrics {
             arrival_timestamp_ms: None,
         });
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..112).collect(), // prompt_len = 12
             max_output_tokens: 1,
             output_token_ids: None,
@@ -2362,6 +2407,7 @@ mod forward_pass_metrics {
         let mut core = VllmCore::new(args);
 
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..16).collect(),
             max_output_tokens: 2,
             output_token_ids: None,
@@ -2431,6 +2477,7 @@ mod forward_pass_metrics {
 
         // r1: 4-token prompt, long output (stays running)
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..4).collect(),
             max_output_tokens: 20,
             output_token_ids: None,
@@ -2445,6 +2492,7 @@ mod forward_pass_metrics {
 
         // r2: another request that will compete for KV
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..116).collect(), // 16 tokens — will pressure KV
             max_output_tokens: 5,
             output_token_ids: None,
@@ -2511,6 +2559,7 @@ mod forward_pass_metrics {
 
         let cold = Uuid::from_u128(90);
         core.receive(DirectRequest {
+            retention: None,
             tokens: tokens.clone(),
             max_output_tokens: 3,
             uuid: Some(cold),
@@ -2531,6 +2580,7 @@ mod forward_pass_metrics {
 
         let warm = Uuid::from_u128(91);
         core.receive(DirectRequest {
+            retention: None,
             tokens,
             max_output_tokens: 3,
             uuid: Some(warm),
@@ -2571,6 +2621,7 @@ mod forward_pass_metrics {
         // Warm one block so the victim's first admission sees a genuine hit.
         let warm = Uuid::from_u128(70);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..4).collect(),
             max_output_tokens: 1,
             uuid: Some(warm),
@@ -2593,12 +2644,14 @@ mod forward_pass_metrics {
         let filler = Uuid::from_u128(71);
         let victim = Uuid::from_u128(72);
         core.receive(DirectRequest {
+            retention: None,
             tokens: (100..108).collect(),
             max_output_tokens: 8,
             uuid: Some(filler),
             ..Default::default()
         });
         core.receive(DirectRequest {
+            retention: None,
             tokens: (0..4).chain(200..212).collect(),
             max_output_tokens: 4,
             uuid: Some(victim),

@@ -13,6 +13,8 @@ use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::engine::RetentionHint;
+
 use crate::engine::KvEvent;
 use crate::engine::common::hashing::Token;
 use crate::engine::common::perf_model::PerfModel;
@@ -76,6 +78,7 @@ pub(crate) struct DirectRequest {
     pub max_output_tokens: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_token_ids: Option<Vec<Token>>,
+    pub retention: Option<RetentionHint>,
     pub uuid: Option<Uuid>,
     pub arrival_timestamp_ms: Option<f64>,
 }
